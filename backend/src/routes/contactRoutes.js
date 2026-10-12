@@ -1,7 +1,7 @@
-
 const express = require("express");
 const Contact = require("../models/Contact");
 const sendContactNotification = require("../config/mailer");
+const connectDB = require("../config/db");
 
 const router = express.Router();
 
@@ -9,6 +9,7 @@ router.post("/", async (req, res) => {
   try {
     const { name, email, message } = req.body;
 
+    // Validate required fields
     if (
       typeof name !== "string" ||
       typeof email !== "string" ||
@@ -51,7 +52,27 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Try sending the notification independently of MongoDB.
+    // Save message to MongoDB
+    let savedContact = null;
+
+    try {
+      await connectDB();
+
+      savedContact = await Contact.create({
+        name: cleanName,
+        email: cleanEmail,
+        message: cleanMessage,
+      });
+
+      console.log("Contact message saved to MongoDB.");
+    } catch (dbError) {
+      console.error(
+        "Contact message database save failed:",
+        dbError.message
+      );
+    }
+
+    // Send email notification
     let emailSent = false;
 
     try {
@@ -70,45 +91,40 @@ router.post("/", async (req, res) => {
       );
     }
 
-    // Try saving the message separately.
-    let savedContact = null;
-
-    try {
-      savedContact = await Contact.create({
-        name: cleanName,
-        email: cleanEmail,
-        message: cleanMessage,
-      });
-
-      console.log("Contact message saved to MongoDB.");
-    } catch (dbError) {
-      console.error(
-        "Contact message database save failed:",
-        dbError.message
-      );
-    }
-
-    if (!emailSent && !savedContact) {
+    // Both operations failed
+    if (!savedContact && !emailSent) {
       return res.status(500).json({
         success: false,
         message:
-          "We could not deliver your message right now. Please try again later.",
+          "We could not process your message right now. Please try again later.",
+        savedToDatabase: false,
+        emailSent: false,
       });
     }
 
+    // Email sent, but database save failed
+    if (!savedContact && emailSent) {
+      return res.status(503).json({
+        success: false,
+        message:
+          "Your email was sent, but the message could not be saved. Please try again later.",
+        savedToDatabase: false,
+        emailSent: true,
+      });
+    }
+
+    // Message saved successfully
     return res.status(201).json({
       success: true,
       message: emailSent
         ? "Your message was sent successfully. Thank you!"
-        : "Your message was received, but email notification could not be sent.",
+        : "Your message was saved, but the email notification could not be sent.",
+      savedToDatabase: true,
       emailSent,
-      savedToDatabase: Boolean(savedContact),
-      data: savedContact
-        ? {
-            id: savedContact._id,
-            createdAt: savedContact.createdAt,
-          }
-        : null,
+      data: {
+        id: savedContact._id,
+        createdAt: savedContact.createdAt,
+      },
     });
   } catch (error) {
     console.error("Contact form error:", error.message);
