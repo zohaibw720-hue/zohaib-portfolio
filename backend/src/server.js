@@ -29,7 +29,6 @@ const contactLimiter = rateLimit({
   },
 });
 
-// Health check — does not require database access.
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
@@ -37,20 +36,7 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Connect to MongoDB before processing contact requests.
-app.use("/api/contact", async (req, res, next) => {
-  try {
-    await connectDB();
-    next();
-  } catch (error) {
-    console.error("Database connection failed:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Database connection failed",
-    });
-  }
-});
-
+// Contact routes no longer require a database connection first.
 app.use("/api/contact", contactLimiter, contactRoutes);
 
 // Export Express app for Vercel.

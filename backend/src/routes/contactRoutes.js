@@ -51,14 +51,7 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Pehle message MongoDB mein save hoga.
-    const contact = await Contact.create({
-      name: cleanName,
-      email: cleanEmail,
-      message: cleanMessage,
-    });
-
-    // Email fail ho tab bhi saved message database mein rahega.
+    // Try sending the notification independently of MongoDB.
     let emailSent = false;
 
     try {
@@ -71,24 +64,58 @@ router.post("/", async (req, res) => {
       emailSent = true;
       console.log("Contact notification email sent successfully.");
     } catch (emailError) {
-      console.error("Contact notification email failed:", emailError.message);
+      console.error(
+        "Contact notification email failed:",
+        emailError.message
+      );
+    }
+
+    // Try saving the message separately.
+    let savedContact = null;
+
+    try {
+      savedContact = await Contact.create({
+        name: cleanName,
+        email: cleanEmail,
+        message: cleanMessage,
+      });
+
+      console.log("Contact message saved to MongoDB.");
+    } catch (dbError) {
+      console.error(
+        "Contact message database save failed:",
+        dbError.message
+      );
+    }
+
+    if (!emailSent && !savedContact) {
+      return res.status(500).json({
+        success: false,
+        message:
+          "We could not deliver your message right now. Please try again later.",
+      });
     }
 
     return res.status(201).json({
       success: true,
-      message: "Your message has been received successfully.",
+      message: emailSent
+        ? "Your message was sent successfully. Thank you!"
+        : "Your message was received, but email notification could not be sent.",
       emailSent,
-      data: {
-        id: contact._id,
-        createdAt: contact.createdAt,
-      },
+      savedToDatabase: Boolean(savedContact),
+      data: savedContact
+        ? {
+            id: savedContact._id,
+            createdAt: savedContact.createdAt,
+          }
+        : null,
     });
   } catch (error) {
     console.error("Contact form error:", error.message);
 
     return res.status(500).json({
       success: false,
-      message: "Unable to send your message right now. Please try again later.",
+      message: "Unable to process your message right now.",
     });
   }
 });
