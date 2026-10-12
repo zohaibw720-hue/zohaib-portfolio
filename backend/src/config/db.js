@@ -9,11 +9,14 @@ async function connectDB() {
   }
 
   await mongoose.connect(uri, {
+    dbName: "portfolio_db",
     serverSelectionTimeoutMS: 15000,
     family: 4,
   });
 
-  console.log("MongoDB Atlas connected successfully");
+  console.log(
+    `MongoDB Atlas connected successfully: ${mongoose.connection.name}`
+  );
 }
 
 module.exports = connectDB;

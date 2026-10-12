@@ -1,6 +1,7 @@
 
 const express = require("express");
 const Contact = require("../models/Contact");
+const sendContactNotification = require("../config/mailer");
 
 const router = express.Router();
 
@@ -30,7 +31,11 @@ router.post("/", async (req, res) => {
       });
     }
 
-    if (cleanName.length > 100 || cleanEmail.length > 254 || cleanMessage.length > 3000) {
+    if (
+      cleanName.length > 100 ||
+      cleanEmail.length > 254 ||
+      cleanMessage.length > 3000
+    ) {
       return res.status(400).json({
         success: false,
         message: "One or more fields exceed the allowed length.",
@@ -46,15 +51,33 @@ router.post("/", async (req, res) => {
       });
     }
 
+    // Pehle message MongoDB mein save hoga.
     const contact = await Contact.create({
       name: cleanName,
       email: cleanEmail,
       message: cleanMessage,
     });
 
+    // Email fail ho tab bhi saved message database mein rahega.
+    let emailSent = false;
+
+    try {
+      await sendContactNotification({
+        name: cleanName,
+        email: cleanEmail,
+        message: cleanMessage,
+      });
+
+      emailSent = true;
+      console.log("Contact notification email sent successfully.");
+    } catch (emailError) {
+      console.error("Contact notification email failed:", emailError.message);
+    }
+
     return res.status(201).json({
       success: true,
-      message: "Your message has been sent successfully.",
+      message: "Your message has been received successfully.",
+      emailSent,
       data: {
         id: contact._id,
         createdAt: contact.createdAt,
