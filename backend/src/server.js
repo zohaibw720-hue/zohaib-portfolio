@@ -9,6 +9,9 @@ const contactRoutes = require("./routes/contactRoutes");
 
 const app = express();
 
+// Trust the single proxy hop used by the deployment platform.
+app.set("trust proxy", 1);
+
 app.use(
   cors({
     origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
@@ -36,13 +39,13 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Contact routes no longer require a database connection first.
+// Contact routes
 app.use("/api/contact", contactLimiter, contactRoutes);
 
-// Export Express app for Vercel.
+// Export Express app for Vercel
 module.exports = app;
 
-// Start the server locally only.
+// Start the server locally only
 if (require.main === module) {
   const PORT = process.env.PORT || 5000;
 
